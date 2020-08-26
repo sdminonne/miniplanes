@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#To be run like ./hack/submit_data.sh data/airlines_schema.dat data/airlines.dat  http://127.0.0.1:8080/save_airline
+#To be run like ./hack/submit_data.sh data/airlines_schema.dat data/airlines.dat  http://127.0.0.1:8080/add_airline
 #curl -u admin:admin --dat "AirlineID=21317&Name=Svyaz%20Rossiya&Alias=Russian%20Commuter%20&IATA=7R&ICAO=SJM&Callsign=RussianConnecty&Country=Russia&Active=Y" http://127.0.0.1:8080/save_airline
 
 schema=$1

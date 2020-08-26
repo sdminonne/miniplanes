@@ -1,9 +1,13 @@
 #!/bin/bash
 
 #docker run -d -p 27017:27017  mongo
-#sleep 10
+podman run -d -p 27017-27019:27017-27019 --name mongodb mongo:4.0.4
+#podman exec -it mongodb mongo
 
-mongook=$(mongo --quiet --eval "db.runCommand({ping: 1})" | jq '.ok' 2> /dev/null )
+sleep 10
+
+mongook=$(podman exec -it mongodb mongo  --quiet --eval "db.runCommand({ping: 1})" | jq '.ok'
+ )
 
 if [ "$mongook" -eq "1" ]; then
   echo "Mongo looks OK"
@@ -37,3 +41,6 @@ ${ROOTDIR}//hack/post_json_data.sh ${ROOTDIR}/data/airlines_schema.dat ${ROOTDIR
 pushd ${ROOTDIR}/schedules-generator/cmd/
 go run main.go -routes-file ${ROOTDIR}/test/e2e/data/BA_AF/routes.dat -storage-host  127.0.0.1 -storage-port 9999
 popd
+
+
+podman stop mongodb

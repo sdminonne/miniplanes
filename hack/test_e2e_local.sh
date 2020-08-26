@@ -1,10 +1,11 @@
 #!/bin/bash
 
-docker run -d -p 27017:27017  mongo
+
+podman run -d -p 27017-27019:27017-27019 --name mongodb mongo:4.0.4
 
 sleep 10
-
-mongook=$(mongo --quiet --eval "db.runCommand({ping: 1})" | jq '.ok' 2> /dev/null )
+mongook=$(podman exec -it mongodb mongo  --quiet --eval "db.runCommand({ping: 1})" | jq '.ok'
+ )
 
 if [ "$mongook" -eq "1" ]; then
   echo "Mongo looks OK"
@@ -12,7 +13,6 @@ else
   echo "Please start Mongo,,,"
   exit -1
 fi
-
 
 make clean
 make build
@@ -32,15 +32,17 @@ UIPID=$!
 
 sleep 3
 
-#${ROOTDIR}/hack/submit_data.sh data/airlines_schema.dat ${ROOTDIR}/test/e2e/data/BA_AF/airlines.dat http://127.0.0.1:8080/save_airline
+${ROOTDIR}/hack/submit_data.sh data/airlines_schema.dat ${ROOTDIR}/test/e2e/data/BA_AF/airlines.dat http://127.0.0.1:8080/save_airline
 
-#${ROOTDIR}/hack/submit_data.sh data/airports_schema.dat ${ROOTDIR}/test/e2e/data/BA_AF/airports.dat http://127.0.0.1:8080/save_airport
+${ROOTDIR}/hack/submit_data.sh data/airports_schema.dat ${ROOTDIR}/test/e2e/data/BA_AF/airports.dat http://127.0.0.1:8080/save_airport
 
 #${ROOTDIR}/hack/submit_data.sh data/schedules_schema.dat ${ROOTDIR}/test/e2e/data/BA_AF/schedules.dat http://127.0.0.1:8080/save_schedule
 
-${ROOTDIR}//hack/post_json_data.sh  ${ROOTDIR}/data/airports_schema.dat ${ROOTDIR}/test/e2e/data/BA_AF/airports.dat  http://127.0.0.1:9999/airports
+#exit
 
-${ROOTDIR}//hack/post_json_data.sh ${ROOTDIR}/data/airlines_schema.dat ${ROOTDIR}/test/e2e/data/BA_AF/airlines.dat http://127.0.0.1:9999/airlines
+#${ROOTDIR}//hack/post_json_data.sh  ${ROOTDIR}/data/airports_schema.dat ${ROOTDIR}/test/e2e/data/BA_AF/airports.dat  http://127.0.0.1:9999/airports
+
+#${ROOTDIR}//hack/post_json_data.sh ${ROOTDIR}/data/airlines_schema.dat ${ROOTDIR}/test/e2e/data/BA_AF/airlines.dat http://127.0.0.1:9999/airlines
 
 
 pushd ${ROOTDIR}/schedules-generator/cmd/
@@ -48,10 +50,10 @@ go run main.go -routes-file ${ROOTDIR}/test/e2e/data/BA_AF/routes.dat -storage-h
 popd
 
 echo "Starting test"
-cd ${ROOTDIR}/test/e2e && go test -c . && ./e2e.test --storage-host 127.0.0.1 --storage-port 9999 --itineraries-server-host 127.0.0.1 --itineraries-server-port 8888
+#cd ${ROOTDIR}/test/e2e && go test -c . && ./e2e.test --storage-host 127.0.0.1 --storage-port 9999 --itineraries-server-host 127.0.0.1 --itineraries-server-port 8888
 
 kill $UIPID
 kill $ISPID
 kill $STOPID
 
-docker rm $(docker stop $(docker ps -a -q --filter ancestor=mongo --format="{{.ID}}"))
+podman rm $(podman stop $(podman ps -a -q --filter ancestor=mongo --format="{{.ID}}"))
