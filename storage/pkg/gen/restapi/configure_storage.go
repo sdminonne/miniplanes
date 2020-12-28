@@ -14,6 +14,8 @@ import (
 	middleware "github.com/go-openapi/runtime/middleware"
 
 	"github.com/amadeusitgroup/miniplanes/storage/cmd/config"
+	"github.com/amadeusitgroup/miniplanes/storage/pkg/db"
+	"github.com/amadeusitgroup/miniplanes/storage/pkg/db/inmemory"
 	"github.com/amadeusitgroup/miniplanes/storage/pkg/db/mongo"
 	"github.com/amadeusitgroup/miniplanes/storage/pkg/gen/models"
 	"github.com/amadeusitgroup/miniplanes/storage/pkg/gen/restapi/operations"
@@ -25,9 +27,20 @@ import (
 	"github.com/amadeusitgroup/miniplanes/storage/pkg/gen/restapi/operations/version"
 )
 
+// DBFactory dispatches the proper storage-server DB
+func DBFactory() db.DB {
+	if config.InMemory {
+		log.Debugf("Accessign in memory DB\n")
+		return inmemory.TheDB()
+	}
+	log.Debugf("Accessing MongoDB %s at %s:%d", config.MongoDBName, config.MongoHost, config.MongoPort)
+	return mongo.NewMongoDB(config.MongoHost, config.MongoPort, config.MongoDBName)
+}
+
 //go:generate swagger generate server --target ../../pkg/gen --name storage --spec ../swagger.yaml --exclude-main
 
 func configureFlags(*operations.StorageAPI) {
+	log.Debugf("Running restapi.configureFlags")
 }
 
 func configureAPI(api *operations.StorageAPI) http.Handler {
@@ -40,7 +53,7 @@ func configureAPI(api *operations.StorageAPI) http.Handler {
 
 	// GetAirlines
 	api.AirlinesGetAirlinesHandler = airlines.GetAirlinesHandlerFunc(func(params airlines.GetAirlinesParams) middleware.Responder {
-		db := mongo.NewMongoDB(config.MongoHost, config.MongoPort, config.MongoDBName)
+		db := DBFactory()
 		modAirlines, err := db.GetAirlines()
 		if err != nil {
 			message := fmt.Sprintf("unable to retrieve airlines: %v", err)
@@ -52,11 +65,11 @@ func configureAPI(api *operations.StorageAPI) http.Handler {
 
 	// AddAirline
 	api.AirlinesAddAirlineHandler = airlines.AddAirlineHandlerFunc(func(params airlines.AddAirlineParams) middleware.Responder {
-		db := mongo.NewMongoDB(config.MongoHost, config.MongoPort, config.MongoDBName)
+		db := DBFactory()
 		modAirline, err := db.InsertAirline(params.Airline)
 		if err != nil {
 			payload := models.Error{}
-			message := fmt.Sprint("%v", err)
+			message := fmt.Sprintf("%v", err)
 			payload.Message = &message
 			switch err.(type) {
 			case *mongo.ConflictError:
@@ -73,7 +86,7 @@ func configureAPI(api *operations.StorageAPI) http.Handler {
 
 	// GetAirports
 	api.AirportsGetAirportsHandler = airports.GetAirportsHandlerFunc(func(params airports.GetAirportsParams) middleware.Responder {
-		db := mongo.NewMongoDB(config.MongoHost, config.MongoPort, config.MongoDBName)
+		db := DBFactory()
 		modAirports, err := db.GetAirports()
 		if err != nil {
 			message := fmt.Sprintf("unable to retrieve airports: %v", err)
@@ -84,7 +97,7 @@ func configureAPI(api *operations.StorageAPI) http.Handler {
 	})
 
 	api.AirportsAddAirportHandler = airports.AddAirportHandlerFunc(func(params airports.AddAirportParams) middleware.Responder {
-		db := mongo.NewMongoDB(config.MongoHost, config.MongoPort, config.MongoDBName)
+		db := DBFactory()
 		modAirport, err := db.InsertAirport(params.Airport)
 		if err != nil {
 			if err != nil {
@@ -103,7 +116,7 @@ func configureAPI(api *operations.StorageAPI) http.Handler {
 
 	// GET Liveness
 	api.LivenessGetLiveHandler = liveness.GetLiveHandlerFunc(func(params liveness.GetLiveParams) middleware.Responder {
-		db := mongo.NewMongoDB(config.MongoHost, config.MongoPort, config.MongoDBName)
+		db := DBFactory()
 		if err := db.Ping(); err != nil {
 			message := fmt.Sprintf("unable to ping DB %s: %v", db.DialString(), err)
 			log.Warnf(message)
@@ -115,7 +128,7 @@ func configureAPI(api *operations.StorageAPI) http.Handler {
 
 	// GET Readiness
 	api.ReadinessGetReadyHandler = readiness.GetReadyHandlerFunc(func(params readiness.GetReadyParams) middleware.Responder {
-		db := mongo.NewMongoDB(config.MongoHost, config.MongoPort, config.MongoDBName)
+		db := DBFactory()
 		if err := db.Ping(); err != nil {
 			message := fmt.Sprintf("unable to ping DB %s: %v", db.DialString(), err)
 			log.Warnf(message)
@@ -128,7 +141,7 @@ func configureAPI(api *operations.StorageAPI) http.Handler {
 	// GET Schedules
 	api.SchedulesGetSchedulesHandler = schedules.GetSchedulesHandlerFunc(func(params schedules.GetSchedulesParams) middleware.Responder {
 		log.Trace("Serving Schedules...")
-		db := mongo.NewMongoDB(config.MongoHost, config.MongoPort, config.MongoDBName)
+		db := DBFactory()
 		modSchedules, err := db.GetSchedules()
 		if err != nil {
 			log.Errorf("Could't get schedules: %v\n", err)
@@ -140,7 +153,7 @@ func configureAPI(api *operations.StorageAPI) http.Handler {
 
 	// AddSchedule
 	api.SchedulesAddScheduleHandler = schedules.AddScheduleHandlerFunc(func(params schedules.AddScheduleParams) middleware.Responder {
-		db := mongo.NewMongoDB(config.MongoHost, config.MongoPort, config.MongoDBName)
+		db := DBFactory()
 		modSchedule, err := db.InsertSchedule(params.Schedule)
 		if err != nil {
 			return schedules.NewAddScheduleDefault(422) // todo Add 422 Unprocessable entity, 409 conflict (even if already exists)
@@ -150,7 +163,7 @@ func configureAPI(api *operations.StorageAPI) http.Handler {
 
 	// DELETE Schedule
 	api.SchedulesDeleteScheduleHandler = schedules.DeleteScheduleHandlerFunc(func(params schedules.DeleteScheduleParams) middleware.Responder {
-		db := mongo.NewMongoDB(config.MongoHost, config.MongoPort, config.MongoDBName)
+		db := DBFactory()
 		err := db.DeleteSchedule(params.ID)
 		if err != nil {
 			return schedules.NewDeleteScheduleBadRequest()
@@ -161,7 +174,7 @@ func configureAPI(api *operations.StorageAPI) http.Handler {
 	// GET Schedule<ID>
 	api.SchedulesGetScheduleHandler = schedules.GetScheduleHandlerFunc(func(params schedules.GetScheduleParams) middleware.Responder {
 		//return middleware.NotImplemented("operation schedules.GetSchedule has not yet been implemented")
-		db := mongo.NewMongoDB(config.MongoHost, config.MongoPort, config.MongoDBName)
+		db := DBFactory()
 		schedule, err := db.GetSchedule(params.ID)
 		if err != nil {
 			return schedules.NewGetSchedulesBadRequest()
@@ -171,7 +184,7 @@ func configureAPI(api *operations.StorageAPI) http.Handler {
 
 	// PUT Schedule
 	api.SchedulesUpdateScheduleHandler = schedules.UpdateScheduleHandlerFunc(func(params schedules.UpdateScheduleParams) middleware.Responder {
-		db := mongo.NewMongoDB(config.MongoHost, config.MongoPort, config.MongoDBName)
+		db := DBFactory()
 		schedule, err := db.UpdateSchedule(params.ID, params.Schedule)
 		if err != nil {
 			return schedules.NewUpdateScheduleBadRequest()

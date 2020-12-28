@@ -30,6 +30,7 @@ var (
 	MongoPort   int
 	MongoDBName string
 
+	InMemory bool
+
 	Version string
 )
-

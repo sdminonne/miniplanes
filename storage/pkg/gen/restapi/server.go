@@ -44,7 +44,8 @@ func init() {
 
 var (
 	enabledListeners []string
-	cleanupTimout    time.Duration
+	cleanupTimeout   time.Duration
+	gracefulTimeout  time.Duration
 	maxHeaderSize    flagext.ByteSize
 
 	socketPath string
@@ -71,7 +72,8 @@ func init() {
 	maxHeaderSize = flagext.ByteSize(1000000)
 
 	flag.StringSliceVar(&enabledListeners, "scheme", defaultSchemes, "the listeners to enable, this can be repeated and defaults to the schemes in the swagger spec")
-	flag.DurationVar(&cleanupTimout, "cleanup-timeout", 10*time.Second, "grace period for which to wait before shutting down the server")
+	flag.DurationVar(&cleanupTimeout, "cleanup-timeout", 10*time.Second, "grace period for which to wait before killing idle connections")
+	flag.DurationVar(&gracefulTimeout, "graceful-timeout", 15*time.Second, "grace period for which to wait before shutting down the server")
 	flag.Var(&maxHeaderSize, "max-header-size", "controls the maximum number of bytes the server will read parsing the request header's keys and values, including the request line. It does not limit the size of the request body")
 
 	flag.StringVar(&socketPath, "socket-path", "/var/run/todo-list.sock", "the unix socket to listen on")
@@ -128,7 +130,8 @@ func NewServer(api *operations.StorageAPI) *Server {
 	s := new(Server)
 
 	s.EnabledListeners = enabledListeners
-	s.CleanupTimeout = cleanupTimout
+	s.CleanupTimeout = cleanupTimeout
+	s.GracefulTimeout = gracefulTimeout
 	s.MaxHeaderSize = maxHeaderSize
 	s.SocketPath = socketPath
 	s.Host = stringEnvOverride(host, "", "HOST")
@@ -170,6 +173,7 @@ func (s *Server) ConfigureFlags() {
 type Server struct {
 	EnabledListeners []string
 	CleanupTimeout   time.Duration
+	GracefulTimeout  time.Duration
 	MaxHeaderSize    flagext.ByteSize
 
 	SocketPath    string
@@ -201,7 +205,6 @@ type Server struct {
 	shuttingDown int32
 	interrupted  bool
 	interrupt    chan os.Signal
-	chanLock     sync.RWMutex
 }
 
 // Logf logs message either via defined user logger or via system one if no user logger is defined.
@@ -287,6 +290,7 @@ func (s *Server) Serve() (err error) {
 
 		configureServer(domainSocket, "unix", string(s.SocketPath))
 
+		servers = append(servers, domainSocket)
 		wg.Add(1)
 		s.Logf("Serving storage at unix://%s", s.SocketPath)
 		go func(l net.Listener) {
@@ -296,7 +300,6 @@ func (s *Server) Serve() (err error) {
 			}
 			s.Logf("Stopped serving storage at unix://%s", s.SocketPath)
 		}(s.domainSocketL)
-		servers = append(servers, domainSocket)
 	}
 
 	if s.hasScheme(schemeHTTP) {
@@ -317,6 +320,7 @@ func (s *Server) Serve() (err error) {
 
 		configureServer(httpServer, "http", s.httpServerL.Addr().String())
 
+		servers = append(servers, httpServer)
 		wg.Add(1)
 		s.Logf("Serving storage at http://%s", s.httpServerL.Addr())
 		go func(l net.Listener) {
@@ -326,7 +330,6 @@ func (s *Server) Serve() (err error) {
 			}
 			s.Logf("Stopped serving storage at http://%s", l.Addr())
 		}(s.httpServerL)
-		servers = append(servers, httpServer)
 	}
 
 	if s.hasScheme(schemeHTTPS) {
@@ -352,7 +355,7 @@ func (s *Server) Serve() (err error) {
 			// https://github.com/golang/go/tree/master/src/crypto/elliptic
 			CurvePreferences: []tls.CurveID{tls.CurveP256},
 			// Use modern tls mode https://wiki.mozilla.org/Security/Server_Side_TLS#Modern_compatibility
-			NextProtos: []string{"http/1.1", "h2"},
+			NextProtos: []string{"h2", "http/1.1"},
 			// https://www.owasp.org/index.php/Transport_Layer_Protection_Cheat_Sheet#Rule_-_Only_Support_Strong_Protocols
 			MinVersion: tls.VersionTLS12,
 			// These ciphersuites support Forward Secrecy: https://en.wikipedia.org/wiki/Forward_secrecy
@@ -413,6 +416,7 @@ func (s *Server) Serve() (err error) {
 
 		configureServer(httpsServer, "https", s.httpsServerL.Addr().String())
 
+		servers = append(servers, httpsServer)
 		wg.Add(1)
 		s.Logf("Serving storage at https://%s", s.httpsServerL.Addr())
 		go func(l net.Listener) {
@@ -422,7 +426,6 @@ func (s *Server) Serve() (err error) {
 			}
 			s.Logf("Stopped serving storage at https://%s", l.Addr())
 		}(tls.NewListener(s.httpsServerL, httpsServer.TLSConfig))
-		servers = append(servers, httpsServer)
 	}
 
 	wg.Wait()
@@ -517,7 +520,7 @@ func (s *Server) handleShutdown(wg *sync.WaitGroup, serversPtr *[]*http.Server) 
 
 	servers := *serversPtr
 
-	ctx, cancel := context.WithTimeout(context.TODO(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), s.GracefulTimeout)
 	defer cancel()
 
 	shutdownChan := make(chan bool)
@@ -596,7 +599,9 @@ func handleInterrupt(once *sync.Once, s *Server) {
 			}
 			s.interrupted = true
 			s.Logf("Shutting down... ")
-			s.Shutdown()
+			if err := s.Shutdown(); err != nil {
+				s.Logf("HTTP server Shutdown: %v", err)
+			}
 		}
 	})
 }

@@ -1,5 +1,5 @@
 
-#PREFIX=localhost:5000/
+PREFIX=localhost:5000
 TAG=latest
 
 all:
@@ -12,8 +12,12 @@ output:
 build: storage-build itineraries-server-build ui-build schedules-generator-build
 
 images: storage-build itineraries-server-build ui-build schedules-generator-build
-	docker build . -t $(PREFIX)miniplanes:$(TAG)
+	podman build . -t $(PREFIX)/miniplanes:$(TAG)
 
+
+###########
+# storage #
+###########
 storage-validate-swagger:
 	cd storage/swagger && swagger validate ./swagger.yaml
 
@@ -22,7 +26,7 @@ storage-build: output
 
 storage-image-build: storage-build
 	cp -f $(OUTPUTDIR)/storage storage/image
-	cd  storage/image && docker build .  -t $(PREFIX)storage:$(TAG)
+	cd  storage/image && podman build .  -t $(PREFIX)/storage:$(TAG)
 	rm -rf storage/image/storage
 
 storage-generate-server:
@@ -31,6 +35,11 @@ storage-generate-server:
 storage-generate-client:
 	cd storage/swagger && swagger generate client --target ../pkg/gen --name storage --spec ./swagger.yaml
 
+
+
+######################
+# itineraries-server #
+######################
 itineraries-server-validate-swagger:
 	cd itineraries-server/swagger && swagger validate ./swagger.yaml
 
@@ -39,7 +48,7 @@ itineraries-server-build: output
 
 itineraries-server-image-build: itineraries-server-build
 	cp -f $(OUTPUTDIR)/itineraries-server itineraries-server/image
-	cd  itineraries-server/image && docker build . -t $(PREFIX)itineraries-server:$(TAG)
+	cd  itineraries-server/image && podman build . -t $(PREFIX)/itineraries-server:$(TAG)
 	rm -f itineraries-server/image/itineraries-server
 
 itineraries-server-generate-server:
@@ -48,21 +57,29 @@ itineraries-server-generate-server:
 itineraries-server-generate-client:
 	cd itineraries-server/swagger && swagger generate client --target ../pkg/gen --name itineraries --spec ./swagger.yaml
 
+######
+# ui #
+######
 ui-build: output
 	cd ui && go-bindata -o=assets/bindata.go --nocompress --nometadata --pkg=assets templates/... static/...
 	CGO_ENABLED=0  GOOS=linux go build --mod=vendor -i -installsuffix cgo -ldflags '-w' -o $(OUTPUTDIR)/ui ui/cmd/main.go
 
 ui-image-build: ui-build
 	cp -f $(OUTPUTDIR)/ui ui/image
-	cd  ui/image && docker build . -t $(PREFIX)ui:$(TAG)
+	cd  ui/image && podman build . -t $(PREFIX)/ui:$(TAG)
 	rm -rf ui/image/ui
 
+
+
+#############################
+# schedules-generator-build #
+#############################
 schedules-generator-build: output
 	CGO_ENABLED=0  GOOS=linux go build --mod=vendor -i -installsuffix cgo -ldflags '-w' -o $(OUTPUTDIR)/schedules-generator schedules-generator/cmd/main.go
 
 schedules-generator-image-build: schedules-generator-build
 	cp -f $(OUTPUTDIR)/schedules-generator schedules-generator/image
-	cd schedules-generator/image  && docker build . -t $(PREFIX)schedules-generator:$(TAG)
+	cd schedules-generator/image  && podman build . -t $(PREFIX)/schedules-generator:$(TAG)
 	rm -rf schedules-generator/image/schedules-generator
 
 test_local: build
@@ -75,3 +92,4 @@ test:
 
 clean: $(OUTPUTDIR)
 	rm -rf $(OUTPUTDIR)
+	podman rmi $(PREFIX)/itineraries-server:$(TAG) $(PREFIX)/schedules-generator:$(TAG)  $(PREFIX)/ui:$(TAG)   $(PREFIX)/storage:$(TAG)

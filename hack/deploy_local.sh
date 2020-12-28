@@ -6,8 +6,7 @@ podman run -d -p 27017-27019:27017-27019 --name mongodb mongo:4.0.4
 
 sleep 10
 
-mongook=$(podman exec -it mongodb mongo  --quiet --eval "db.runCommand({ping: 1})" | jq '.ok'
- )
+mongook=$(podman exec -it mongodb mongo  --quiet --eval "db.runCommand({ping: 1})" | jq '.ok')
 
 if [ "$mongook" -eq "1" ]; then
   echo "Mongo looks OK"

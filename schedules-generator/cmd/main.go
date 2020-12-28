@@ -70,8 +70,11 @@ type Route struct {
 func computeDepartureArrivals(origin, destination *models.Airport) ([]string, error) {
 	arrivalTimes := []string{}
 
-	if origin == nil || destination == nil {
-		return arrivalTimes, fmt.Errorf("missing origin or destination airport")
+	if origin == nil  {
+		return arrivalTimes, fmt.Errorf("missing origin airport")
+	}
+	if destination == nil {
+		return arrivalTimes, fmt.Errorf("missing destination airport")
 	}
 	if origin == destination {
 		return arrivalTimes, fmt.Errorf("origin and destination, same airport")

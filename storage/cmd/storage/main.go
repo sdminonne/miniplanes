@@ -42,11 +42,15 @@ import (
 const (
 	mongoHostParamName = "mongo-host"
 	mongoHostDefault   = "mongo"
+
 	mongoPortParamName = "mongo-port"
 	mongoPortDefault   = 27017
 
 	mongoDBNameParamName = "mongo-db-name"
 	mongoDBNameDefault   = "miniplanes"
+
+	inMemoryParamName = "in-memory"
+	inMemoryDefault   = false
 )
 
 func init() {
@@ -71,6 +75,8 @@ func main() {
 	flag.StringVar(&config.MongoHost, mongoHostParamName, mongoHostDefault, "the mongo service name")
 	flag.IntVar(&config.MongoPort, mongoPortParamName, mongoPortDefault, "the port of the mongo service")
 	flag.StringVar(&config.MongoDBName, mongoDBNameParamName, mongoDBNameDefault, "name of the Mongo DB")
+	flag.BoolVar(&config.InMemory, inMemoryParamName, inMemoryDefault, "in memory DB")
+
 	var verbosity string
 	flag.StringVar(&verbosity, "verbosity", log.WarnLevel.String(), "Verbosity level: debug, info, warn, error, fatal, panic")
 
@@ -95,11 +101,6 @@ func main() {
 		lvl = log.InfoLevel
 	}
 	log.SetLevel(lvl)
-	log.Infof("Running storage version: %s", config.Version)
-	log.Infof("Running storage with %s: %s", mongoHostParamName, config.MongoHost)
-	log.Infof("Running storage with %s: %d", mongoPortParamName, config.MongoPort)
-	log.Infof("Running storage with %s: %s", mongoDBNameParamName, config.MongoDBName)
-	log.Infof("Running storage with verbosity: %s", lvl.String())
 
 	api := operations.NewStorageAPI(swaggerSpec)
 	server = restapi.NewServer(api)

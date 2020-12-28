@@ -32,8 +32,13 @@ import "github.com/amadeusitgroup/miniplanes/storage/pkg/gen/models"
 type DB interface {
 	Ping() error
 	DialString() string
-	GetSchedules() ([]*models.Schedule, error)
 	GetAirlines() ([]*models.Airline, error)
+	InsertAirline(a *models.Airline) (*models.Airline, error)
 	GetAirports() ([]*models.Airport, error)
-	InsertSchedule(s *models.Schedule) error
+	InsertAirport(a *models.Airport) (*models.Airport, error)
+	GetSchedules() ([]*models.Schedule, error)
+	GetSchedule(id int64) (*models.Schedule, error)
+	InsertSchedule(s *models.Schedule) (*models.Schedule, error)
+	UpdateSchedule(id int64, s *models.Schedule) (*models.Schedule, error)
+	DeleteSchedule(id int64) error
 }
